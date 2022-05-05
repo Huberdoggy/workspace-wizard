@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # init globally accessible array to track changed files
-declare -a changed_file_arr
+changed_file_arr=()
+echo "Length of array: ${#changed_file_arr}"
+printf '\n%s' "${changed_file_arr[*]}"
 
 init_check() {
 	# Check wether its a first time use or not
@@ -72,8 +74,7 @@ manage() {
 		read -p "What do you wish to do? => " -n 1 -r USER_INPUT
 		USER_INPUT=${USER_INPUT:-1} # to set the default (see above)
 		case $USER_INPUT in
-			[1]* )    show_diff_check;; # Test run without 'show' arg
-			          #show_diff_check;;
+			[1]* )    show_diff_check;;
 			[2]* )    conf_push;;
 			[3]* )    echo -e "\nTODO conf_pull";;
 			[4]* )    find_conf_files;;
@@ -142,15 +143,15 @@ diff_check() {
 		  diff=$(colordiff -u --suppress-common-lines\
 		  "${conf_files_repo[$i]}" "${HOME}"/.config/htop/"${conf_file_name}")
 		fi
-		  if [[ $diff != "" ]]; then
-			  if [[ $1 == "show" ]]; then
+		if [[ $diff != "" ]]; then
+			if [[ $1 == "show" ]]; then
 				printf "\n\n%s" "$(tput setaf 6)Running diff between local version of ${conf_file_name} and$(tput sgr0)"
 				printf "\n%s\n\n" "$(tput setaf 6)Remote copy at ${CONF_REPO}$(tput sgr0)"
 				printf "%s\n\n" "$diff"
-			  fi
-			# Append any changes to our other array
-			changed_file_arr+=("${conf_file_name}")
-		  fi
+			fi
+			  # Append any changes to our other array
+			  changed_file_arr+=("${conf_file_name}")
+		fi
 	done
 	if [[ ${#changed_file_arr} == 0 ]]; then
 		echo -e "\n\nNo Changes in conf files."
@@ -165,6 +166,32 @@ show_diff_check() {
 
 conf_push () {
   diff_check
+  echo -e "\nThe following of Kyle's config files were changed : "
+  # Doing this to ensure that running menu options back to back doesn't dupe changed files
+  sorted_unique_files=($(echo "${changed_file_arr[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+  for file in "${sorted_unique_files[@]}"; do
+    echo "$file"
+    if [[ "$file" =~ \.bash* ]]; then
+      cp "${HOME}/$file" "${HOME}/${CONF_DEST}/$(basename "${CONF_REPO}" | cut -c 1-14)"
+    elif [[ $file =~ idea\.* ]]; then
+      cp "${HOME}/Library/Application\ Support/JetBrains/IntelliJIdea2022.1/$file"\
+      "${HOME}/${CONF_DEST}/$(basename "${CONF_REPO}" | cut -c 1-14)"
+    else
+      cp "${HOME}/.config/htop/$file" "${HOME}/${CONF_DEST}/$(basename "${CONF_REPO}" | cut -c 1-14)"
+    fi
+  done
+
+  # For shortened Git command usage
+  conf_repo="${HOME}/${CONF_DEST}/$(basename "${CONF_REPO}" | cut -c 1-14)"
+  git -C "$conf_repo" add --all
+
+  echo -e "Enter your commit message (CTRL + D to confirm it) => "
+  commit=$(</dev/stdin)
+
+  git -C "$conf_repo" commit -m "$commit"
+
+  # And push it
+  git -C "$conf_repo" push
 }
 # Test find functions
 init_check
