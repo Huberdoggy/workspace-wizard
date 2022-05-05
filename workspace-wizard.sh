@@ -1,40 +1,38 @@
 #!/usr/bin/env bash
+# init globally accessible array to track changed files
+declare -a changed_file_arr
 
 init_check() {
 	# Check wether its a first time use or not
-	if [[ -z ${DOT_REPO} && -z ${DOT_DEST} ]]; then
-	    # show first time setup menu
-		# initial_setup
-		# Inverse logic for testing - run the user menu function =>
-		manage
+	if [[ -z ${CONF_REPO} && -z ${CONF_DEST} ]]; then
+	  # show first time setup menu
+		initial_setup
 	else
-	  echo "Env vars are set"
-		# repo_check
-	  #manage
+		# Run the standard opts menu
+	  manage
 	fi
 }
 
 initial_setup() {
 	echo -e "\n\nFirst time use, Set up Workspace Wizard"
 	echo -e "....................................\n"
-	read -p "Enter repository URL of Kyle's config files => " -r DOT_REPO
-	# Syntax - will default under $HOME if DOT_DEST isn't specified
-	read -p "Where should I clone $(basename "${DOT_REPO}") (${HOME}/..): " -r DOT_DEST
-	DOT_DEST=${DOT_DEST:-$HOME}
-	if [[ -d "$HOME/$DOT_DEST" ]]; then
+	read -p "Enter repository URL of Kyle's config files => " -r CONF_REPO
+	# Syntax - will default under $HOME if CONF_DEST isn't specified
+	read -p "Where should I clone $(basename "${CONF_REPO}") (${HOME}/..): " -r CONF_DEST
+	CONF_DEST=${CONF_DEST:-$HOME}
+	if [[ -d "$HOME/$CONF_DEST" ]]; then
 		# Dir exists, so clone the repo in the destination directory
 		# Syntax for specified clone dir - git -C <path> <repo>
-		if git -C "${HOME}/${DOT_DEST}" clone "${DOT_REPO}"; then
-			add_env "$DOT_REPO" "$DOT_DEST"
-			echo -e "\nWorkspace Wizard successfully configured!"
-			echo -e "\nGoodbye"
+		if git -C "${HOME}/${CONF_DEST}" clone "${CONF_REPO}"; then
+			add_env "$CONF_REPO" "$CONF_DEST"
+			echo -e "\nWorkspace Wizard successfully configured!\nGoodbye"
 		else
 			# invalid arguments to exit, Repository Not Found
-			echo -e "\n$DOT_REPO Unavailable. Exiting"
+			echo -e "\n$CONF_REPO Unavailable. Exiting"
 			exit 1
 		fi
 	else
-		echo -e "\n$DOT_DEST Not a Valid directory"
+		echo -e "\n$CONF_DEST Not a Valid directory"
 		exit 1
 	fi
 }
@@ -42,20 +40,21 @@ initial_setup() {
 add_env() {
 	# export environment variables - for now, I'm just using condition for Bash
 	# since that's the shell I always use
-	echo -e "\nExporting env variables DOT_DEST & DOT_REPO ..."
+	echo -e "\nExporting env variables CONF_DEST & CONF_REPO ..."
 
 	current_shell=$(basename "$SHELL")
 	if [[ $current_shell == "bash" ]]; then
-	  # Args order from previous funtion get added as vars to .bashrc
-		echo "export DOT_REPO=$1" >> "$HOME"/.bashrc
-		echo "export DOT_DEST=$2" >> "$HOME"/.bashrc
+	  # Args order from previous funtion get added as vars to .bash_profile
+		echo "export CONF_REPO=$1" >> "$HOME"/.bash_profile
+		echo "export CONF_DEST=$2" >> "$HOME"/.bash_profile
 	else
 	  # Placeholder for other shells
-		echo "Couldn't export DOT_REPO and DOT_DEST."
+		echo "Couldn't export CONF_REPO and CONF_DEST."
 		echo "Consider exporting them manually".
 		exit 1
 	fi
-	echo -e "Configuration for SHELL: $current_shell has been updated."
+	echo -e "Configuration for SHELL: $current_shell has been updated.\n"
+	cat "$HOME"/.bash_profile | egrep -i --color=always "(conf_repo|conf_dest).*"
 }
 
 manage() {
@@ -73,8 +72,9 @@ manage() {
 		read -p "What do you wish to do? => " -n 1 -r USER_INPUT
 		USER_INPUT=${USER_INPUT:-1} # to set the default (see above)
 		case $USER_INPUT in
-			[1]* )    echo -e "\nTODO show_diff_check";;
-			[2]* )    echo -e "\nTODO conf_push";;
+			[1]* )    show_diff_check;; # Test run without 'show' arg
+			          #show_diff_check;;
+			[2]* )    conf_push;;
 			[3]* )    echo -e "\nTODO conf_pull";;
 			[4]* )    find_conf_files;;
 			[q/Q]* )  clear
@@ -88,36 +88,8 @@ find_conf_files() {
   printf "\n"
   os_type=$(uname)
   if [[ $os_type == "Darwin" && -n $(java --version) ]]; then
-    # init 2 empty arrays. Only one will be used depending on choice from input
-    home_conf_files=()
-    all_conf_files=()
-    echo -e "\n\nIt appears you're running on a Mac with Java installed."
-    read -p "Would you like to check for custom IntelliJ option files in known locations? [y/n/q]? " -n 1 -r RESPONSE
-    case $RESPONSE in
-      [n/N]*) while read -r value; do
-                home_conf_files+=( $(basename "$value") )
-                done < <( find "${HOME}" -maxdepth 4\
-                 -type f \( -name "*rc" -or -name ".bash*" \)\
-                  | egrep -v "disable|zsh|nvm|prettier|history")
-                  printf "\n\n%s" "BASH AND .RC FILES LOCATED:"
-                  printf "\n%s" "${home_conf_files[@]}"
-                  echo
-                  ;;
-      [y/Y]*) while read -r value; do
-                all_conf_files+=( $(basename "$value") )
-                done < <(find ~/Library/ "${HOME}" -maxdepth 4 \
-                -type f \( -name "*rc" -or -name "*.vmoptions" -or -name "*.properties" -or -name ".bash*" \)\
-                 | egrep -v "disable|zsh|nvm|prettier|history")
-                printf "\n\n%s" "ALL KYLE'S CONFIG FILES FROM FILTER LOCATED:"
-                printf "\n%s" "${all_conf_files[@]}"
-                echo
-                ;;
-      [q/Q]*) echo -e "\n\nOkay run the program again when desired\nGoodbye!"
-              exit;;
-      *)      printf "\n%s\n" "Unknown option. Exiting.."
-              exit 1
-              ;;
-    esac
+    # Run MacOS specific function
+    run_mac
   else # Placeholder to do later...
     echo "Could not determine operating system. Exiting..."
     exit 1
@@ -125,5 +97,74 @@ find_conf_files() {
 
 }
 
+run_mac() {
+      # init an empty array.
+      all_conf_files=()
+      echo -e "\n\nIt appears you're running on a Mac with Java installed."
+      echo -e "Wizard will also check for custom IntelliJ IDE option files in known locations."
+      while read -r value; do
+      all_conf_files+=("$value")
+      done < <(find "${HOME}"/Library/ "${HOME}" -maxdepth 4 \
+      -type f ! -wholename "\/*\/*\/shell-stuff/*" \( -name "*rc" -or -name "*.vmoptions" -or -name "*.properties" -or -name ".bash*" \)\
+      | egrep -v "disable|zsh|nvm|prettier|history")
+      printf "\n\n%s" "ALL KYLE'S CONFIG FILES FROM FILTER LOCATED:"
+      printf "\n%s" "${all_conf_files[@]}"
+      echo
+}
+
+diff_check() {
+  # If called from conf_push, this will be empty
+	# if [[ -z $1 ]]; then
+	  # init globally accessible array to track changed files
+		# MOVED - to global scope due to Bash 3.2 limitations of -g flag
+	# fi
+
+  conf_files_repo=()
+	# Conf files in repository
+	while read -r value; do
+	conf_files_repo+=("$value")
+	done < <( find "${HOME}/${CONF_DEST}/$(basename "${CONF_REPO}" | cut -c 1-14)" -maxdepth 1 -type f\
+	\( -name "*rc" -or -name "*.vmoptions" -or -name "*.properties" -or -name ".bash*" \) )
+	# check length here
+	for (( i=0; i<"${#conf_files_repo[@]}"; i++))
+	do
+	  # Like my locate function, just trim the file name from path
+		conf_file_name=$(basename "${conf_files_repo[$i]}")
+		# compare the HOME version of file to that of repo
+		# For testing, allow common lines to be shown
+		if [[ $conf_file_name =~ idea\.* ]]; then
+		  diff=$(colordiff -u --suppress-common-lines\
+		  "${conf_files_repo[$i]}" "${HOME}"/Library/Application\ Support/JetBrains/IntelliJIdea2022.1/"${conf_file_name}")
+		elif [[ $conf_file_name =~ \.bash* ]]; then
+		  diff=$(colordiff -u --suppress-common-lines\
+		  "${conf_files_repo[$i]}" "${HOME}/${conf_file_name}")
+		else
+		  diff=$(colordiff -u --suppress-common-lines\
+		  "${conf_files_repo[$i]}" "${HOME}"/.config/htop/"${conf_file_name}")
+		fi
+		  if [[ $diff != "" ]]; then
+			  if [[ $1 == "show" ]]; then
+				printf "\n\n%s" "$(tput setaf 6)Running diff between local version of ${conf_file_name} and$(tput sgr0)"
+				printf "\n%s\n\n" "$(tput setaf 6)Remote copy at ${CONF_REPO}$(tput sgr0)"
+				printf "%s\n\n" "$diff"
+			  fi
+			# Append any changes to our other array
+			changed_file_arr+=("${conf_file_name}")
+		  fi
+	done
+	if [[ ${#changed_file_arr} == 0 ]]; then
+		echo -e "\n\nNo Changes in conf files."
+		return
+	fi
+}
+
+show_diff_check() {
+	diff_check "show"
+}
+
+
+conf_push () {
+  diff_check
+}
 # Test find functions
 init_check
