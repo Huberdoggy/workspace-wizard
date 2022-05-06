@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # init globally accessible array to track changed files
 changed_file_arr=()
-echo "Length of array: ${#changed_file_arr}"
-printf '\n%s' "${changed_file_arr[*]}"
 
 init_check() {
 	# Check wether its a first time use or not
@@ -193,5 +191,5 @@ conf_push () {
   # And push it
   git -C "$conf_repo" push
 }
-# Test find functions
+# Kick off
 init_check
